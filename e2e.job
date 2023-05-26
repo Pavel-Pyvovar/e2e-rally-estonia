@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH --job-name="e2e"
+#SBATCH --time=2-00:00:00
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:a100-40g:1
+#SBATCH --cpus-per-task=32 # cpu-cores per task (>1 if multi-threaded tasks)
+#SBATCH --mem=40000
+
+module load cuda/11.7.0
+
+nvidia-smi
+
+python -c "import torch; print(torch.cuda.is_available())"
+
+rsync -a /gpfs/space/projects/rally2023/rally-estonia-cropped-antialias /tmp
+
+python train.py --input-modality nvidia-camera --wandb-project eestirally --output-modality steering_angle --patience 10 --max-epochs 100 --model-name steering-angle --model-type pilotnet-conditional --dataset-folder /tmp/rally-estonia-cropped-antialias
+# python train.py --input-modality nvidia-camera --wandb-project eestirally --output-modality waypoints --patience 10 --max-epochs 100 --model-name waypoints --model-type pilotnet-conditional --dataset-folder /tmp/rally-estonia-cropped-antialias --metadata-file nvidia_frames_ext.csv
+# python train.py --input-modality nvidia-camera --wandb-project eestirally --output-modality steering_angle --patience 10 --max-epochs 100 --model-name transfer_learning --model-type transfer-learning --dataset-folder /tmp/rally-estonia-cropped-antialias --batch-size 256

@@ -16,6 +16,7 @@ from dataloading.nvidia import NvidiaTrainDataset, NvidiaValidationDataset, Nvid
 from dataloading.ouster import OusterTrainDataset, OusterValidationDataset
 from efficient_net import effnetv2_s
 from pilotnet import PilotNetConditional, PilotnetControl, PilotNet
+from transfer_learning import TransferLearning
 from trainer import ControlTrainer, ConditionalTrainer, PilotNetTrainer
 
 
@@ -31,7 +32,7 @@ def parse_arguments():
     argparser.add_argument(
         '--model-type',
         required=True,
-        choices=['pilotnet', 'pilotnet-conditional', 'pilotnet-control', 'efficientnet'],
+        choices=['pilotnet', 'pilotnet-conditional', 'pilotnet-control', 'efficientnet', 'transfer-learning'],
         help='Defines which model will be trained.'
     )
 
@@ -311,6 +312,10 @@ def train_model(model_name, train_conf, augment_conf):
     elif train_conf.model_type == "efficientnet":
         model = effnetv2_s()
         trainer = PilotNetTrainer(model_name, target_name="steering_angle")
+    elif train_conf.model_type == "transfer-learning":
+        model = TransferLearning()
+        trainer = PilotNetTrainer(
+            model_name, train_conf.output_modality, wandb_project=train_conf.wandb_project)
     else:
         print(f"Uknown output model type {train_conf.model_type}")
         sys.exit()
@@ -373,14 +378,17 @@ def load_data(train_conf, augment_conf):
 
     dataset_path = Path(train_conf.dataset_folder)
     if train_conf.input_modality == "nvidia-camera":
+        use_transfer_learning = True if train_conf.model_type == "transfer-learning" else False
         trainset = NvidiaTrainDataset(dataset_path, train_conf.output_modality, train_conf.n_branches,
                                       n_waypoints=train_conf.n_waypoints,
                                       camera=train_conf.camera_name,
                                       augment_conf=augment_conf,
-                                      metadata_file=train_conf.metadata_file)
+                                      metadata_file=train_conf.metadata_file,
+                                      use_transfer_learning=use_transfer_learning)
         validset = NvidiaValidationDataset(dataset_path, train_conf.output_modality, train_conf.n_branches,
                                            n_waypoints=train_conf.n_waypoints,
-                                           metadata_file=train_conf.metadata_file)
+                                           metadata_file=train_conf.metadata_file,
+                                           use_transfer_learning=use_transfer_learning)
     elif train_conf.input_modality == "nvidia-camera-winter":
         trainset = NvidiaWinterTrainDataset(dataset_path, train_conf.output_modality,
                                             train_conf.n_branches, n_waypoints=train_conf.n_waypoints,

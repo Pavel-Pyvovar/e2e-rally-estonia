@@ -149,10 +149,9 @@ class Trainer:
         model.load_state_dict(torch.load(f"{self.save_dir}/best.pt"))
         model.to(self.device)
 
-        #data = iter(valid_loader).next()
-        #Update to fix an issue of deprecated code.
-        data = iter(valid_loader)
-        data = next(data)
+        # data = iter(valid_loader).next()
+        data_iter = iter(valid_loader)
+        data = next(data_iter)
         sample_inputs = self.create_onxx_input(data)
         torch.onnx.export(model, sample_inputs, f"{self.save_dir}/best.onnx")
         onnx.checker.check_model(f"{self.save_dir}/best.onnx")
@@ -238,7 +237,7 @@ class PilotNetTrainer(Trainer):
     def train_batch(self, model, data, target_values, condition_mask, criterion):
         inputs = data['image'].to(self.device)
         target_values = target_values.to(self.device)
-        predictions = model(inputs)
+        predictions = model(inputs.float())
         return predictions, criterion(predictions, target_values)
 
 

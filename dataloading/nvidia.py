@@ -131,11 +131,24 @@ class AugmentImage:
 
 
 class Normalize(object):
-    def __call__(self, data, transform=None):
-        # normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    def __init__(self, transform=None, imagenet_standardisation=False) -> None:
+        self.imagenet_standardisation = imagenet_standardisation
+
+    def __call__(self, data):
         image = data["image"]
         image = image / 255
-        # data["image"] = normalize(image)
+        if self.imagenet_standardisation:
+            normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            image = normalize(image)
+        data["image"] = image
+        return data
+    
+
+class Pad(object):
+    def __call__(self, data, transform=None):
+        image = data["image"]
+        pad = transforms.Pad((0, 78, 0, 78))
+        image = pad(image)
         data["image"] = image
         return data
 
@@ -291,38 +304,6 @@ class NvidiaDataset(Dataset):
         frames_df["yaw_delta"] = np.abs(frames_df["yaw"]) - np.abs(frames_df["yaw"]).shift(-1)
         frames_df = frames_df[np.abs(frames_df["yaw_delta"]) < 0.1]
 
-        # if self.calculate_waypoints:
-        #
-        #     vehicle_x = frames_df["position_x"]
-        #     vehicle_y = frames_df["position_y"]
-        #
-        #     for i in np.arange(1, self.N_WAYPOINTS + 1):
-        #         wp_global_x = frames_df["position_x"].shift(-i * self.CAP_WAYPOINTS)
-        #         wp_global_y = frames_df["position_y"].shift(-i * self.CAP_WAYPOINTS)
-        #         frames_df[f"x_{i}"] = wp_global_x
-        #         frames_df[f"y_{i}"] = wp_global_y
-        #         yaw = frames_df["yaw"]
-        #         #frames_df["yaw"] = yaw
-        #
-        #         wp_local_x = (wp_global_x - vehicle_x) * np.cos(yaw) + (wp_global_y - vehicle_y) * np.sin(yaw)
-        #         wp_local_y = -(wp_global_x - vehicle_x) * np.sin(yaw) + (wp_global_y - vehicle_y) * np.cos(yaw)
-        #         frames_df[f"x_{i}_offset"] = wp_local_x
-        #         frames_df[f"y_{i}_offset"] = wp_local_y
-        #
-        #         # Remove rows without trajectory offsets, should be last N_WAYPOINTS rows
-        #         frames_df = frames_df[frames_df[f"x_{i}_offset"].notna()]
-        #
-        #     # frames_df["yaw_delta"] = np.abs(frames_df["yaw"]) - np.abs(frames_df["yaw"]).shift(-1)
-        #     # frames_df = frames_df[np.abs(frames_df["yaw_delta"]) < 0.1]
-        #     #
-        #     # frames_df["x_1_delta"] = frames_df["x_1_offset"] - frames_df["x_1_offset"].shift(-1)
-        #     # frames_df = frames_df[np.abs(frames_df["x_1_delta"]) < 0.1]
-        #     #
-        #     # frames_df["y_1_delta"] = frames_df["y_1_offset"] - frames_df["y_1_offset"].shift(-1)
-        #     # frames_df = frames_df[np.abs(frames_df["y_1_delta"]) < 0.1]
-        #
-        #     # frames_df = frames_df[np.abs(frames_df["steering_angle"]) < 2.0]
-
         len_after_filtering = len(frames_df)
 
         camera_images = frames_df[f"{camera}_filename"].to_numpy()
@@ -344,14 +325,15 @@ class NvidiaDataset(Dataset):
 
 class NvidiaTrainDataset(NvidiaDataset):
     def __init__(self, root_path, output_modality="steering_angle", n_branches=3, n_waypoints=10,
-                 camera="front_wide", augment_conf=AugmentationConfig(), metadata_file="nvidia_frames.csv"):
+                 camera="front_wide", augment_conf=AugmentationConfig(), metadata_file="nvidia_frames.csv",
+                 use_transfer_learning=False):
         self.dataset_paths = [
-            root_path / "2021-05-20-12-36-10_e2e_sulaoja_20_30",
-            root_path / "2021-05-20-12-43-17_e2e_sulaoja_20_30",
-            root_path / "2021-05-20-12-51-29_e2e_sulaoja_20_30",
-            root_path / "2021-05-20-13-44-06_e2e_sulaoja_10_10",
-            root_path / "2021-05-20-13-51-21_e2e_sulaoja_10_10",
-            root_path / "2021-05-20-13-59-00_e2e_sulaoja_10_10",
+            # root_path / "2021-05-20-12-36-10_e2e_sulaoja_20_30",
+            # root_path / "2021-05-20-12-43-17_e2e_sulaoja_20_30",
+            # root_path / "2021-05-20-12-51-29_e2e_sulaoja_20_30",
+            # root_path / "2021-05-20-13-44-06_e2e_sulaoja_10_10",
+            # root_path / "2021-05-20-13-51-21_e2e_sulaoja_10_10",
+            # root_path / "2021-05-20-13-59-00_e2e_sulaoja_10_10",
             root_path / "2021-05-28-15-07-56_e2e_sulaoja_20_30",
             root_path / "2021-05-28-15-17-19_e2e_sulaoja_20_30",
             {'path': root_path / "2021-06-09-13-14-51_e2e_rec_ss2", 'start': 125, 'end': 49725},
@@ -393,7 +375,16 @@ class NvidiaTrainDataset(NvidiaDataset):
             root_path / "2021-10-25-17-06-34_e2e_rec_ss2_arula_back",
         ]
 
-        tr = transforms.Compose([AugmentImage(augment_config=augment_conf), Normalize()])
+        if use_transfer_learning:
+            tr = transforms.Compose([
+                AugmentImage(augment_config=augment_conf),
+                # Pad to make the smallest dimension to be at least 224 as in ImageNet
+                Pad(),
+                # Normalize to match ImageNet
+                Normalize(use_transfer_learning)
+                ])
+        else:
+            tr = transforms.Compose([AugmentImage(augment_config=augment_conf), Normalize()])
         super().__init__(self.dataset_paths, tr, camera=camera, output_modality=output_modality, n_branches=n_branches,
                          n_waypoints=n_waypoints, metadata_file=metadata_file)
 
@@ -401,24 +392,32 @@ class NvidiaTrainDataset(NvidiaDataset):
 class NvidiaValidationDataset(NvidiaDataset):
     # todo: remove default parameters
     def __init__(self, root_path, output_modality="steering_angle", n_branches=3, n_waypoints=10, camera="front_wide",
-                 metadata_file="nvidia_frames.csv"):
+                 metadata_file="nvidia_frames.csv", use_transfer_learning=False):
         self.dataset_paths = [
             root_path / "2021-05-28-15-19-48_e2e_sulaoja_20_30",
-            #root_path / "2021-06-07-14-20-07_e2e_rec_ss6",
+            # root_path / "2021-06-07-14-20-07_e2e_rec_ss6",
             root_path / "2021-06-07-14-06-31_e2e_rec_ss6",
             root_path / "2021-06-07-14-09-18_e2e_rec_ss6",
-            #root_path / "2021-06-07-14-36-16_e2e_rec_ss6",
+            # root_path / "2021-06-07-14-36-16_e2e_rec_ss6",
             root_path / "2021-09-24-14-03-45_e2e_rec_ss11_backwards",
-            #root_path / "2021-10-26-10-49-06_e2e_rec_ss20_elva",
-            #root_path / "2021-10-26-11-08-59_e2e_rec_ss20_elva_back",
+            # root_path / "2021-10-26-10-49-06_e2e_rec_ss20_elva",
+            # root_path / "2021-10-26-11-08-59_e2e_rec_ss20_elva_back",
             root_path / "2021-10-20-15-11-29_e2e_rec_vastse_ss13_17_back",
             {'path': root_path / "2021-10-11-14-50-59_e2e_rec_vahi", 'start': 100, 'end': 15000},
             {'path': root_path / "2021-10-14-13-08-51_e2e_rec_vahi_backwards", 'start': 80, 'end': 13420},
-            #root_path / "2022-06-10-13-23-01_e2e_elva_forward",
-            #root_path / "2022-06-10-13-03-20_e2e_elva_backward"
+            # root_path / "2022-06-10-13-23-01_e2e_elva_forward",
+            # root_path / "2022-06-10-13-03-20_e2e_elva_backward"
         ]
 
-        tr = transforms.Compose([Normalize()])
+        if use_transfer_learning:
+            tr = transforms.Compose([
+                    # Pad to make the smallest dimension to be at least 224 as in ImageNet
+                    Pad(),
+                    # Normalize to match ImageNet
+                    Normalize(use_transfer_learning)
+                ])
+        else:
+            tr = transforms.Compose([Normalize()])
         super().__init__(self.dataset_paths, tr, camera=camera, output_modality=output_modality, n_branches=n_branches,
                          n_waypoints=n_waypoints, metadata_file=metadata_file)
 
