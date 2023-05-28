@@ -276,6 +276,40 @@ class ControlTrainer(Trainer):
         return image_input, control
 
 
+class PilotAttTrainer(Trainer):
+
+    def predict(self, model, dataloader):
+        all_predictions = []
+        model.eval()
+
+        with torch.no_grad():
+            progress_bar = tqdm(total=len(dataloader), smoothing=0)
+            progress_bar.set_description("Model predictions")
+            for i, (data, target_values, condition_mask) in enumerate(dataloader):
+                inputs = data['image'].to(self.device)
+                turn_signal = data['turn_signal']
+                control = F.one_hot(turn_signal, 3)[:, None, :].to(self.device)
+                predictions = model(inputs, control)
+                all_predictions.extend(predictions.cpu().squeeze().numpy())
+                progress_bar.update(1)
+
+        return np.array(all_predictions)
+
+    def train_batch(self, model, data, target_values, condition_mask, criterion):
+        inputs = data['image'].to(self.device)
+        target_values = target_values.to(self.device)
+        turn_signal = data['turn_signal']
+        control = F.one_hot(turn_signal, 3)[:, None, :].to(self.device)
+
+        predictions = model(inputs, control)
+        return predictions, criterion(predictions, target_values)
+
+    def create_onxx_input(self, data):
+        image_input = data[0]['image'].to(self.device)
+        turn_signal = data[0]['turn_signal']
+        control = F.one_hot(turn_signal, 3).to(torch.float32)[:, None, :].to(self.device)
+        return image_input, control
+
 class ConditionalTrainer(Trainer):
 
     def predict(self, model, dataloader):

@@ -16,8 +16,9 @@ from dataloading.nvidia import NvidiaTrainDataset, NvidiaValidationDataset, Nvid
 from dataloading.ouster import OusterTrainDataset, OusterValidationDataset
 from efficient_net import effnetv2_s
 from pilotnet import PilotNetConditional, PilotnetControl, PilotNet
+from pilotatt import PilotAtt
 from transfer_learning import TransferLearning
-from trainer import ControlTrainer, ConditionalTrainer, PilotNetTrainer
+from trainer import ControlTrainer, ConditionalTrainer, PilotNetTrainer, PilotAttTrainer
 
 
 def parse_arguments():
@@ -32,7 +33,7 @@ def parse_arguments():
     argparser.add_argument(
         '--model-type',
         required=True,
-        choices=['pilotnet', 'pilotnet-conditional', 'pilotnet-control', 'efficientnet', 'transfer-learning'],
+        choices=['pilotnet', 'pilotnet-conditional', 'pilotnet-control', 'efficientnet', 'transfer-learning', 'pilot-attention'],
         help='Defines which model will be trained.'
     )
 
@@ -316,6 +317,10 @@ def train_model(model_name, train_conf, augment_conf):
         model = TransferLearning()
         trainer = PilotNetTrainer(
             model_name, train_conf.output_modality, wandb_project=train_conf.wandb_project)
+    elif train_conf.model_type == "pilot-attention":
+        model = PilotAtt(train_conf.n_input_channels, train_conf.n_outputs)
+        trainer = PilotAttTrainer(model_name, train_conf.output_modality, train_conf.n_branches,
+                                 train_conf.wandb_project)
     else:
         print(f"Uknown output model type {train_conf.model_type}")
         sys.exit()
