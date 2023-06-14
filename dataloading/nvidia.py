@@ -340,6 +340,8 @@ class NvidiaTrainDataset(NvidiaDataset):
             {'path': root_path / "2021-06-09-13-55-03_e2e_rec_ss2_backwards", 'start': 150, 'end': 53625},
             {'path': root_path / "2021-06-09-14-58-11_e2e_rec_ss3", 'start': 175, 'end': 43775},
             {'path': root_path / "2021-06-09-15-42-05_e2e_rec_ss3_backwards", 'start': 100, 'end': 40625},
+            #Path("/gpfs/space/home/siur/NN_project/e2e-rally-estonia/augmented_nikita"),
+            #Path("/gpfs/space/home/siur/NN_project/e2e-rally-estonia/augmented_brightness"),
             root_path / "2021-06-09-16-24-59_e2e_rec_ss13",
             root_path / "2021-06-09-16-50-22_e2e_rec_ss13_backwards",
             root_path / "2021-06-10-12-59-59_e2e_ss4",

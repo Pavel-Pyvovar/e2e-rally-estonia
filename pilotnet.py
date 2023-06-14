@@ -1,6 +1,31 @@
 import torch
 import torch.nn as nn
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
+class PreprocessingLayer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.rgbtoyuv = kornia.color.RgbToYuv()
+        self.blur = kornia.augmentation.RandomGaussianBlur((3, 3), (1., 1.), p=1.)
+        
+    def forward(self, x):
+        x = self.rgbtoyuv(x)
+        x = self.blur(x)
+        return x
+    
+class ImageStandardization(nn.Module):
+    def __init__(self):
+        super(ImageStandardization, self).__init__()
+        
+    def forward(self, x):
+        mean = torch.mean(x)
+        std = torch.std(x)
+        x_normalized = (x - mean) / std
+        return x_normalized
 
 class PilotNet(nn.Module):
     """
@@ -61,33 +86,43 @@ class PilotNetConditional(nn.Module):
         super(PilotNetConditional, self).__init__()
 
         self.features = nn.Sequential(
+            #PreprocessingLayer(),
+            #ImageStandardization(),
             nn.BatchNorm2d(n_input_channels),
             nn.Conv2d(n_input_channels, 24, 5, stride=2),
             nn.BatchNorm2d(24),
             nn.LeakyReLU(),
+            #nn.Dropout(0.2),  # Add dropout layer
             nn.Conv2d(24, 36, 5, stride=2),
             nn.BatchNorm2d(36),
             nn.LeakyReLU(),
+            #nn.Dropout(0.2),  # Add dropout layer
             nn.Conv2d(36, 48, 5, stride=2),
             nn.BatchNorm2d(48),
             nn.LeakyReLU(),
+            #nn.Dropout(0.2),  # Add dropout layer
             nn.Conv2d(48, 64, 3, stride=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(),
+            #nn.Dropout(0.2),  # Add dropout layer
             nn.Conv2d(64, 64, 3, stride=1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(),
             nn.Flatten()
         )
 
+        self.features.apply(init_weights)
+
         self.conditional_branches = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(1664, 100),
                 nn.BatchNorm1d(100),
                 nn.LeakyReLU(),
+                #nn.Dropout(p=0.5),
                 nn.Linear(100, 50),
                 nn.BatchNorm1d(50),
                 nn.LeakyReLU(),
+                #nn.Dropout(p=0.2),
                 nn.Linear(50, 10),
                 nn.LeakyReLU(),
                 nn.Linear(10, n_outputs),
